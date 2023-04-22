@@ -1,0 +1,503 @@
+@Override
+	public R batchUpdateItems(Map<String, Object> params) {
+		R r = new R(false);
+		String storeSysCode = (String) params.get("storeSysCode");
+		String pstoreId = (String) params.get("storeId");
+		if (StrKit.isBlank(storeSysCode) || StrKit.isBlank(pstoreId)) {
+			r.setMsg("店铺编码参数异常");
+			return r;
+		}
+		UserUtils.setTargetStore(pstoreId, storeSysCode);
+
+		String updateByParam = "1", unUpdateByParam = "0";
+		String psearchFlag = (String) params.get("psearchFlag");
+		if (StrKit.isBlank(psearchFlag)) {
+			psearchFlag = unUpdateByParam;// 默认为不按条件更新商品
+		}
+		boolean unUpdateByParam_b = unUpdateByParam.equals(psearchFlag);
+		boolean updateByParam_b = updateByParam.equals(psearchFlag);
+		String batchOptItemIdStr = (String) params.get("batchOptItemIdStr");
+
+		// 如果是根据商品ID进行更新 需要校验 batchOptItemIdStr是否为空
+		if (unUpdateByParam_b && StrKit.isBlank(batchOptItemIdStr)) {
+			r.setMsg("请选择要批量修改的商品");
+			return r;
+		}
+		PosStore store = posStoreMapper.selectByStoreSysCode(storeSysCode);
+		String storeId = store.getId();
+		UserUtils.setSelectByStoreSysCode(storeSysCode);
+		UserUtils.setTargetStore(store.getId(), storeSysCode);
+		boolean updateItem_Spu = false;
+		boolean updateItem_Sku = false;
+		boolean updateItem_SpuExt = false;
+
+		Integer isPoint = (Integer) params.get("isPoint");
+//		String isPoint = (String) params.get("isPoint");
+		if (isPoint != null) {
+			ItemIsPointEnum e = ItemIsPointEnum.getEnumByCode(isPoint);
+			if (e == null) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			boolean setPointVal = (Boolean) params.get("setPointVal");
+			if (setPointVal) {
+				updateItem_Sku = true;
+				params.put("setPointVal", "1");
+			}
+			updateItem_Spu = true;
+		}
+
+		String deductType = (String) params.get("deductType");
+		if (StrKit.notBlank(deductType)) {
+			ItemDeductTypeEnum e = ItemDeductTypeEnum.getEnumByCode(deductType);
+			if (e == null) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+
+		String categoryId = (String) params.get("categoryId");
+		if (StrKit.notBlank(categoryId)) {
+			PosCategory posCategory = posCategoryService.findByCategoryId(categoryId, storeSysCode);
+			params.put("categoryName", posCategory.getCateName());
+			updateItem_Spu = true;
+			//更新时段菜单商品
+			posPeriodsMenuItemService.batchClassification(categoryId, storeSysCode, batchOptItemIdStr);
+		}
+
+		String measureFlag = (String) params.get("measureFlag");
+		if (StrKit.notBlank(measureFlag)) {
+			ItemMeasureFlagEnum e = ItemMeasureFlagEnum.getEnumByCode(measureFlag);
+			if (e == null) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+
+		String status = (String) params.get("status");
+		if (StrKit.notBlank(status)) {
+			ItemStatusEnum e = ItemStatusEnum.getCodeByCode(status);
+			if (e == null) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+
+		String isDiscountStr = String.valueOf(params.get("isDiscount"));
+		if (StrKit.notBlank(isDiscountStr)) {
+			Integer isDiscount = Integer.parseInt(isDiscountStr);
+			ItemSpuIsDiscountEnum e = ItemSpuIsDiscountEnum.getEnumByCode(isDiscount);
+			if (e == null) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+
+		String unitName = (String) params.get("unitName");
+		if (StrKit.notBlank(unitName)) {
+			params.put("unitName", unitName);
+			updateItem_Spu = true;
+			updateItem_Sku = true;
+		}
+
+		String mealsFeeStr = String.valueOf(params.get("mealsFee"));
+		if (StrKit.notBlank(mealsFeeStr)) {
+			BigDecimal mealsFee = new BigDecimal(mealsFeeStr);
+			params.put("mealsFee", mealsFee);
+			updateItem_Sku = true;
+		}
+
+		String mealBoxQtyStr = String.valueOf(params.get("mealBoxQty"));
+		if (StrKit.notBlank(mealBoxQtyStr)) {
+			BigDecimal mealBoxQty = new BigDecimal(mealBoxQtyStr);
+			params.put("mealBoxQty", mealBoxQty);
+			updateItem_Sku = true;
+		}
+
+		String minCount = String.valueOf(params.get("minCount"));
+		if (StrKit.notBlank(minCount)) {
+			params.put("minCount", minCount);
+			updateItem_Spu = true;
+			updateItem_Sku = true;
+		}
+
+		String isWxStr = String.valueOf(params.get("isWx"));
+		if (StrKit.notBlank(isWxStr)) {
+			Integer isWxStrcount = Integer.parseInt(isWxStr);
+			if (isWxStrcount != 0 && isWxStrcount != 1) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+
+		String isReserveStr = String.valueOf(params.get("isReserve"));
+		if (StrKit.notBlank(isReserveStr)) {
+			Integer isReserve = Integer.parseInt(isReserveStr);
+			if (isReserve != 0 && isReserve != 1) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+		//批量设置是否即时输入数量
+		String isInputNumStr = String.valueOf(params.get("isInputNum"));
+		if (StrKit.notBlank(isInputNumStr)) {
+			Integer isInputNum = Integer.parseInt(isInputNumStr);
+			if (isInputNum != 0 && isInputNum != 1) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+		//批量设置是否可美团团购验券
+		String isMtCkCouponStr = String.valueOf(params.get("isMtCkCoupon"));
+		if (StrKit.notBlank(isMtCkCouponStr)) {
+			Integer isMtCkCoupon = Integer.parseInt(isMtCkCouponStr);
+			if (isMtCkCoupon != 0 && isMtCkCoupon != 1) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+
+		String isWaimaiStr = String.valueOf(params.get("isWaimai"));
+		if (StrKit.notBlank(isWaimaiStr)) {
+			Integer isWaimaicount = Integer.parseInt(isWaimaiStr);
+			if (isWaimaicount != 0 && isWaimaicount != 1) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+
+		String isDepositStr = (String) params.get("isDeposit");
+		if (StrKit.notBlank(isDepositStr)) {
+			Integer isDeposit = Integer.parseInt(isDepositStr);
+			if (isDeposit != 0 && isDeposit != 1) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+		//批量设置商品税目信息
+		String taxRateId = String.valueOf(params.get("taxRateId"));
+		if (StrKit.notBlank(taxRateId)) {
+			params.put("taxRateId", taxRateId);
+			updateItem_Sku = true;
+		}
+		//批量设置预警天数
+		String qualityWarnDays = String.valueOf(params.get("qualityWarnDays"));
+		if (StrKit.notBlank(qualityWarnDays)) {
+			params.put("qualityWarnDays", qualityWarnDays);
+			updateItem_Spu = true;
+		}
+
+		String isFreeStr = (String) params.get("isFree");
+		if (StrKit.notBlank(isFreeStr)) {
+			Integer isFree = Integer.parseInt(isFreeStr);
+			if (isFree != 0 && isFree != 1) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+
+		String isInMinConsumeStr = (String) params.get("isInMinConsume");
+		if (StrKit.notBlank(isInMinConsumeStr)) {
+			Integer isInMinConsume = Integer.parseInt(isInMinConsumeStr);
+			if (isInMinConsume != 0 && isInMinConsume != 1) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+		//批量设置仅在套餐内销售
+		String isOnlyUseInComboStr = (String) params.get("isOnlyUseInCombo");
+		if (StrKit.notBlank(isOnlyUseInComboStr)) {
+			Integer isOnlyUseInCombo = Integer.parseInt(isOnlyUseInComboStr);
+			if (isOnlyUseInCombo != 0 && isOnlyUseInCombo != 1) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+		String isServiceFeeStr = (String) params.get("isServiceFee");
+		if (StrKit.notBlank(isServiceFeeStr)) {
+			Integer isServiceFee = Integer.parseInt(isServiceFeeStr);
+			if (isServiceFee != 0 && isServiceFee != 1) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+
+		// 更新SPUEXT 属性
+		String brandId = (String) params.get("brandId");
+		if (StrKit.notBlank(brandId)) {
+			PosBrand posBrand = posBrandService.findByBrandId(brandId, storeSysCode);
+			updateItem_SpuExt = true;
+			params.put("brandName", posBrand.getBrandName());
+		}
+
+		String vendorId = (String) params.get("vendorId");
+		if (StrKit.notBlank(vendorId)) {
+			PosVendor posVendor = posVendorService.findByVendorId(vendorId, storeSysCode);
+			updateItem_SpuExt = true;
+			params.put("vendorName", posVendor.getVendorName());
+		}
+
+
+			updateItem_SpuExt = true;
+			params.put("dynamicAttr", dynamicAttr);
+		}
+
+		String batchClearDynamicAttrs = (String) params.get("batchClearDynamicAttrs");
+		if ("batchClearDynamicAttrs".equals(batchClearDynamicAttrs)) {
+			params.put("batchClearDynamicAttrs", "batchClearDynamicAttrs");
+			updateItem_SpuExt = true;
+		}
+		//是否管理保质期
+		String qualityPeriodStatusStr = (String) params.get("qualityPeriodStatus");
+		if (StrKit.notBlank(qualityPeriodStatusStr)) {
+			Integer qualityPeriodStatus = Integer.parseInt(qualityPeriodStatusStr);
+			if (qualityPeriodStatus != 0 && qualityPeriodStatus != 1) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			updateItem_SpuExt = true;
+		}
+
+		List<String> itemSpuIdList = Lists.newArrayList();
+		if (StrKit.notBlank(batchOptItemIdStr)) {
+			String[] batchOptItemIdArr = batchOptItemIdStr.split(CommonConstant.VERTICAL_BAR_SPLIIT);
+			itemSpuIdList = Arrays.asList(batchOptItemIdArr);
+		}
+
+
+		params.put("pitemIdList", itemSpuIdList);
+
+		String unPriceStr = (String) params.get("unPrice");
+		if (StrKit.notBlank(unPriceStr)) {
+			Integer unPrice = Integer.parseInt(unPriceStr);
+			if (unPrice != 0 && unPrice != 1) {
+				r.setMsg("参数异常");
+				return r;
+			}
+			List<String> stringList = Lists.newArrayList();
+			Map<String, Object> map = Maps.newHashMap();
+			map.put("storeId", pstoreId);
+			map.put("storeSysCode", storeSysCode);
+			for (String string : itemSpuIdList) {
+				map.put("spuId", string);
+				List<ItemSkuExtendDto> list = posItemSkuService.listItemSkuAndMultiCode(map);
+				if (list.size() > 1 || "G".equals(list.get(0).getItemType())) {
+					continue;
+				}
+				stringList.add(string);
+			}
+			if (CommonUtil.isNotNullList(stringList)) {
+				params.put("pitemIdList", stringList);
+			} else {
+				r.setMsg("多规格商品、套餐商品不支持修改时价菜");
+				return r;
+			}
+			updateItem_Spu = true;
+		}
+
+		//添加营养成分
+		String nutrientListString = JSON.toJSONString(params.get("nutrientList"));
+		List<PosItemNutrient> nutrientList = JSON.parseArray(nutrientListString, PosItemNutrient.class);
+		if (CommonUtil.isNotNullList(nutrientList)) {
+			this.addItemNutrient(storeId, storeSysCode, itemSpuIdList, nutrientList);
+		}
+
+
+		String isStockStr = (String) params.get("isStock");
+		if (StrKit.notBlank(isStockStr)) {
+			Integer isStock = Integer.parseInt(isStockStr);
+			if (isStock != 0 && isStock != 1) {
+				r.setMsg("参数异常");
+				return r;
+			}
+
+			updateItem_Spu = true;
+		}
+
+
+		// 设置查询条件
+		boolean hasSearchParams = false;
+		String pitemType = (String) params.get("pitemType");
+		if (StrKit.notBlank(pitemType)) {
+			hasSearchParams = true;
+		}
+		String categoryIds = (String) params.get("pcategoryIds");
+		if (StrKit.notBlank(categoryIds)) {
+			String[] categoryIdArr = categoryIds.split(",");
+			params.put("pcategoryIdList", Arrays.asList(categoryIdArr));
+			hasSearchParams = true;
+		}
+		String param = (String) params.get("param");
+		if (StrKit.notBlank(param)) {
+			hasSearchParams = true;
+		}
+
+		/*
+		 * 更新SPU
+		 */
+		if (updateItem_Spu) {
+			this.baseMapper.updateItemsBySearchQ(params);// spu
+		}
+
+		List<String> optItemSpuIdList = Lists.newArrayList();// 操作的商品SPUID
+		String updateAllByStore_key = "updateAllByStore";
+		boolean updateItem_otherInfos = false;
+		params.put(updateAllByStore_key, "0"); // 1更新所有，0更新满足条件的
+		// 当不勾选商品 且 更新满足查询条件的商品，则查询出需要更新的商品SPUID
+		if (updateByParam_b) {
+			int updateItemNum = 0;
+			if (hasSearchParams) {// 有查询条件
+				optItemSpuIdList = this.baseMapper.selectId4UpdateItemsBySearchQ(params);
+				updateItemNum = optItemSpuIdList.size();
+//				updateItemNum = this.baseMapper.selectId4UpdateItemsBySearchQ_Count(params);
+			} else {
+				// 更新所有
+				updateItem_otherInfos = true;
+				params.put(updateAllByStore_key, "1");
+			}
+			if (updateItemNum > 0) { // if(CommonUtil.isNotNullList(itemSpuIdList)) {
+				// 更新 满足条件的
+				updateItem_otherInfos = true;
+			}
+		} else {
+			// 更新勾选的spuId
+			updateItem_otherInfos = true;
+			optItemSpuIdList = itemSpuIdList;
+		}
+
+		/*
+		 * 更新SKU、SPUEXT
+		 */
+		if (updateItem_otherInfos) {
+			ShardingDBConfigVo sku_vo = ShardingDBConfig.getShardingDBConfigVoByLogicTable("pos_item_sku",
+					storeSysCode);
+			ShardingDBConfigVo spu_vo = ShardingDBConfig.getShardingDBConfigVoByLogicTable("pos_item_spu",
+					storeSysCode);
+			ShardingDBConfigVo spuext_vo = ShardingDBConfig.getShardingDBConfigVoByLogicTable("pos_item_spu_ext",
+					storeSysCode);
+			params.put("pos_item_sku", sku_vo.getTableName());
+			params.put("pos_item_spu", spu_vo.getTableName());
+			params.put("pos_item_spu_ext", spuext_vo.getTableName());
+
+			if (updateItem_Sku) {
+				posItemSkuService.updateItemsBySearchQ(params);
+			}
+			if (updateItem_SpuExt) {
+				posItemSpuExtService.updateItemsBySearchQ(params);
+			}
+		}
+
+
+		/*
+		 * 附加属性，其他的表
+		 */
+		// 商品加料
+		String additionGroupIds = (String) params.get("additionGroupIds");
+		String batchClearFeedings = (String) params.get("batchClearFeedings");
+		if (StrKit.isBlank(additionGroupIds) && "batchClearFeedings".equals(batchClearFeedings)) {
+			// 先全量删除商品加料
+			Map<String, Object> delParams = Maps.newHashMap();
+			delParams.put("storeId", storeId);
+			delParams.put("storeSysCode", storeSysCode);
+			if ("1".equals(params.get(updateAllByStore_key))) {
+				posItemAdditionGroupService.delAdditionGroupByParams(delParams);
+			} else if (CommonUtil.isNotNullList(optItemSpuIdList)) {
+				delParams.put("spuIdList", optItemSpuIdList);
+				EntityWrapper wrapper =new EntityWrapper();
+				wrapper.eq("storeId", storeId);
+				wrapper.eq("storeSysCode", storeSysCode);
+				wrapper.eq("isDelete", 0);
+				PosItemSpu itemSpu =new PosItemSpu();
+				itemSpu.setHasAddition(0);// 商品是否有配菜： 0-没有 1-有
+				itemSpu.setSysUpdateTime(null);
+				wrapper.in("id", optItemSpuIdList);
+				posItemAdditionGroupService.delAdditionGroupByParams(delParams);
+				this.update(itemSpu,wrapper);
+			}
+
+		}
+		if (StrKit.notBlank(additionGroupIds)) {
+			String[] additionGroupIdArr = additionGroupIds.split(",");
+
+			// 先全量删除商品加料
+			Map<String, Object> delParams = Maps.newHashMap();
+			delParams.put("storeId", storeId);
+			delParams.put("storeSysCode", storeSysCode);
+			if ("1".equals(params.get(updateAllByStore_key))) {
+				posItemAdditionGroupService.delAdditionGroupByParams(delParams);
+			} else if (CommonUtil.isNotNullList(optItemSpuIdList)) {
+				delParams.put("spuIdList", optItemSpuIdList);
+				posItemAdditionGroupService.delAdditionGroupByParams(delParams);
+			}
+
+			// 再新增商品加料
+			List<PosAdditionGroup> additionGroupList = posAdditionGroupService.findByIdList(storeId, storeSysCode,
+					Arrays.asList(additionGroupIdArr));
+			if (CommonUtil.isNotNullList(additionGroupList)) {
+				// SPU商品
+				List<PosItemSpu> itemSpuList = Lists.newArrayList();
+				if ("1".equals(params.get(updateAllByStore_key))) {
+					itemSpuList = find4BatchUpdateAddition(storeId, storeSysCode, null); // findByStoreId(storeId,
+					// storeSysCode, 0);
+				} else {
+					itemSpuList = find4BatchUpdateAddition(storeId, storeSysCode, optItemSpuIdList);
+				}
+
+				Map<PosAdditionGroup, List<PosAddition>> additionGroupMap = Maps.newHashMap();
+				for (PosAdditionGroup entity : additionGroupList) {
+					List<PosAddition> additionList = posAdditionService.findByGroupId(storeId, storeSysCode,
+							entity.getId());
+					additionGroupMap.put(entity, additionList);
+				}
+
+				String optTime = DateUtils.getCurrentDate();
+				String optBy = UserUtils.getUser();
+				List<PosItemAdditionGroup> itemAdditionGroupList_new = Lists.newArrayList();
+				List<PosItemAddition> itemAdditionList_new = Lists.newArrayList();
+				for (PosItemSpu itemSpu : itemSpuList) {
+					for (PosAdditionGroup additionGroup : additionGroupMap.keySet()) {
+						PosItemAdditionGroup itemAdditionGroup = posItemAdditionGroupService
+								.genItemAdditionGroupByAdditionGroup(additionGroup, itemSpu, optBy, optTime);
+						itemAdditionGroupList_new.add(itemAdditionGroup);
+
+						String groupId = itemAdditionGroup.getId();
+						List<PosAddition> additionList = additionGroupMap.get(additionGroup);
+						for (PosAddition addition : additionList) {
+							PosItemAddition itemAddition = posItemAdditionService
+									.genItemAdditionByAdditionGroup(addition, itemSpu, groupId, optBy, optTime);
+							itemAdditionList_new.add(itemAddition);
+						}
+					}
+					itemSpu.setHasAddition(1);// 商品是否有配菜： 0-没有 1-有
+					itemSpu.setSysUpdateTime(DateUtils.getCurrentDateTime());
+				}
+
+				this.updateBatchById(itemSpuList);
+
+				if (CommonUtil.isNotNullList(itemAdditionGroupList_new)) {
+					posItemAdditionGroupService.insertBatch(itemAdditionGroupList_new);
+				}
+				if (CommonUtil.isNotNullList(itemAdditionList_new)) {
+					posItemAdditionService.insertBatch(itemAdditionList_new);
+				}
+			}
+		}
+
+		r.rSuccess();
+		r.setData(true);
+		return r;
+	}
